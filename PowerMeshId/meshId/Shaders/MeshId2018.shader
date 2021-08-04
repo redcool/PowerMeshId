@@ -16,7 +16,6 @@ Shader "Unlit/MeshId2018"
     
             #include "UnityCG.cginc"
             #include "AutoLight.cginc"
-            
             struct appdata
             {
                 float4 vertex : POSITION;
@@ -68,8 +67,8 @@ Shader "Unlit/MeshId2018"
                 UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
                 float3 color:TEXCOORD2;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
                 SHADOW_COORDS(1)
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
 
@@ -125,27 +124,32 @@ Shader "Unlit/MeshId2018"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            #pragma multi_compile_instancing
             #pragma multi_compile_shadowcaster
             #include "UnityCG.cginc"
 
             struct v2f { 
-                V2F_SHADOW_CASTER;
+                float4 vertex:SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             v2f vert(appdata v)
             {
                 v2f o;
-                TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)
-
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_TRANSFER_INSTANCE_ID(v, o);
+                
+                o.vertex = UnityClipSpaceShadowCasterPos(v.vertex, v.normal);
+                o.vertex = UnityApplyLinearShadowBias(o.vertex);
                 float vc = abs((v.color.x * 255) -__MeshId);
                 v.vertex.x += __OffsetX;
-                o.pos.w = lerp(o.pos.w,-1,vc);
+                o.vertex.w = lerp(o.vertex.w,-1,vc);
                 return o;
             }
 
             float4 frag(v2f i) : SV_Target
             {
-                SHADOW_CASTER_FRAGMENT(i)
+                return 0;
             }
             ENDCG
         }
