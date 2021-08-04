@@ -11,38 +11,21 @@ Shader "Unlit/MeshId2018"
         _TexArr("_TexArr",2darray)=""{}
         [IntRange]_Depth("_Depth",range(0,255)) = 0
     }
-    SubShader
-    {
-        Tags { "RenderType"="Opaque" }
-        LOD 100
 
-        Pass
-        {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            // make fog work
-            #pragma multi_compile_fog
-            #pragma multi_compile_instancing
-
+    CGINCLUDE
+    
             #include "UnityCG.cginc"
-
+            #include "AutoLight.cginc"
+            
             struct appdata
             {
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
                 float3 color:COLOR;
+                float3 normal:NORMAL;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
-            struct v2f
-            {
-                float4 uv : TEXCOORD0;
-                UNITY_FOG_COORDS(1)
-                float4 vertex : SV_POSITION;
-                float3 color:TEXCOORD2;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
-            };
 
             sampler2D _MainTex;
             UNITY_DECLARE_TEX2DARRAY(_TexArr);
@@ -63,6 +46,33 @@ Shader "Unlit/MeshId2018"
             #define __TexArrOn UNITY_ACCESS_INSTANCED_PROP(Props2018,_TexArrOn)
             #define __TexArr_ST UNITY_ACCESS_INSTANCED_PROP(Props2018,_TexArr_ST)
             #define __Depth UNITY_ACCESS_INSTANCED_PROP(Props2018,_Depth)
+    ENDCG
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" }
+        LOD 100
+
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            // make fog work
+            #pragma multi_compile_fog
+            #pragma multi_compile_instancing
+
+
+            struct v2f
+            {
+                float4 uv : TEXCOORD0;
+                UNITY_FOG_COORDS(1)
+                float4 vertex : SV_POSITION;
+                float3 color:TEXCOORD2;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                SHADOW_COORDS(1)
+            };
+
+
 
             v2f vert (appdata v)
             {
@@ -83,6 +93,8 @@ Shader "Unlit/MeshId2018"
                 UNITY_TRANSFER_FOG(o,o.vertex);
                 o.color = vc;
                 o.vertex.w = lerp(o.vertex.w,-1,vc);
+
+                TRANSFER_SHADOW(o)
                 return o;
             }
 
@@ -96,9 +108,44 @@ Shader "Unlit/MeshId2018"
                 }else{
                     col = tex2D(_MainTex, i.uv.xy);
                 }
+                fixed shadow = SHADOW_ATTENUATION(i);
+                col *= shadow;
                 // apply fog
                 UNITY_APPLY_FOG(i.fogCoord, col);
+
                 return col;
+            }
+            ENDCG
+        }
+
+        Pass
+        {
+            Tags {"LightMode"="ShadowCaster"}
+
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma multi_compile_shadowcaster
+            #include "UnityCG.cginc"
+
+            struct v2f { 
+                V2F_SHADOW_CASTER;
+            };
+
+            v2f vert(appdata v)
+            {
+                v2f o;
+                TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)
+
+                float vc = abs((v.color.x * 255) -__MeshId);
+                v.vertex.x += __OffsetX;
+                o.pos.w = lerp(o.pos.w,-1,vc);
+                return o;
+            }
+
+            float4 frag(v2f i) : SV_Target
+            {
+                SHADOW_CASTER_FRAGMENT(i)
             }
             ENDCG
         }
